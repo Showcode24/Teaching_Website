@@ -8,7 +8,10 @@ export enum AppRouteKeys {
   tutorRegistration = "/tutor-registration",
   parentRegistration = "/parent-registration",
   innovationBox = "/innovation-box",
-  jobForm = "/job-form"
+  jobForm = "/job-form",
+  tutorProfile = "/tutor-profile",
+  parentProfile = "/parent-profile"
+
 }
 
 export type AppRouteType = {
@@ -52,6 +55,14 @@ export const AppRouteMap: { [key in AppRouteKeys]: AppRouteType } = {
   },
   "/job-form": {
     label: "Job Form",
+    role: "none",
+  },
+    "/tutor-profile": {
+    label: "Tutor Profile",
+    role: "none",
+  },
+  "/parent-profile": {
+    label: "Parent Profile",
     role: "none",
   }
 };

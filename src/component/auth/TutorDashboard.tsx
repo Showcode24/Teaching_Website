@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import {
   Box,
   Typography,
@@ -46,13 +46,24 @@ import {
   LocationOn,
   School,
   AccountCircle,
+  PhotoCamera,
 } from "@mui/icons-material"
 import { motion, AnimatePresence } from "framer-motion"
 import { styled, alpha } from "@mui/material/styles"
 import { collection, getDocs, getDoc, doc, updateDoc, query, orderBy } from "firebase/firestore"
 import { signOut } from "firebase/auth"
 import { auth, db } from "../../firebase/firebase"
+import { Cloudinary } from "@cloudinary/url-gen"
+import { AdvancedImage } from "@cloudinary/react"
+import { fill } from "@cloudinary/url-gen/actions/resize"
+import { autoGravity } from "@cloudinary/url-gen/qualifiers/gravity"
 
+// Initialize Cloudinary instance
+const cld = new Cloudinary({
+  cloud: {
+    cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "drsdycckb",
+  },
+})
 
 // Interfaces
 interface Job {
@@ -140,8 +151,31 @@ const SearchTextField = styled(TextField)(({ theme }) => ({
   },
 }))
 
+// Styled avatar with upload button overlay
+const ProfileAvatarWrapper = styled(Box)(({ theme }) => ({
+  position: "relative",
+  "&:hover .upload-icon": {
+    opacity: 1,
+  },
+}))
+
+const UploadIconButton = styled(IconButton)(({ theme }) => ({
+  position: "absolute",
+  bottom: 0,
+  right: 0,
+  backgroundColor: theme.palette.primary.main,
+  color: theme.palette.primary.contrastText,
+  padding: theme.spacing(0.5),
+  opacity: 0,
+  transition: "opacity 0.3s ease",
+  "&:hover": {
+    backgroundColor: theme.palette.primary.dark,
+  },
+}))
+
 export default function Dashboard() {
   const [firstName, setFirstName] = useState("")
+  const [profilePicture, setProfilePicture] = useState<string | null>(null)
   const [jobs, setJobs] = useState<Job[]>([])
   const [hireRequests, setHireRequests] = useState<HireRequest[]>([])
   const [loading, setLoading] = useState(true)
@@ -253,6 +287,15 @@ export default function Dashboard() {
         if (userDoc.exists()) {
           const userData = userDoc.data()
           setFirstName(userData.firstName || "")
+        }
+
+        // Fetch tutor profile data to get the profile picture
+        const tutorDoc = await getDoc(doc(db, "tutors", auth.currentUser.uid))
+        if (tutorDoc.exists()) {
+          const tutorData = tutorDoc.data()
+          if (tutorData.bioInfo?.profilePicture) {
+            setProfilePicture(tutorData.bioInfo.profilePicture)
+          }
         }
       }
     }
@@ -372,12 +415,11 @@ export default function Dashboard() {
       }))
 
       setFilteredJobs(
-        [...jobRequests, ...formattedHireRequests].map(job => ({
+        [...jobRequests, ...formattedHireRequests].map((job) => ({
           ...job,
-          accepted_tutor_id: "accepted_tutor_id" in job ? job.accepted_tutor_id : null
-        })) as Job[]
-      );
-
+          accepted_tutor_id: "accepted_tutor_id" in job ? job.accepted_tutor_id : null,
+        })) as Job[],
+      )
     } else if (tab === "Appointments") {
       setFilteredJobs(jobs.filter((job) => job.accepted_tutor_id?.id === currentUserId))
     }
@@ -437,6 +479,20 @@ export default function Dashboard() {
     setAnchorEl(null)
   }
 
+  // Navigate to profile page to upload profile picture
+  const handleProfilePictureClick = () => {
+    navigate("/profile")
+  }
+
+  // Create a Cloudinary image object if profilePicture exists
+  const profileImage = profilePicture
+    ? cld
+      .image(profilePicture.includes("/") ? profilePicture.split("/").pop()?.split(".")[0] || "" : profilePicture)
+      .format("auto")
+      .quality("auto")
+      .resize(fill().gravity(autoGravity()).width(40).height(40))
+    : null
+
   return (
     <Box sx={{ flexGrow: 1, bgcolor: "background.default", minHeight: "100vh" }}>
       <StyledAppBar position="sticky" elevation={0}>
@@ -473,16 +529,35 @@ export default function Dashboard() {
                   <Settings sx={{ color: "text.secondary" }} />
                 </IconButton>
               </Tooltip>
-              <IconButton
-                size="large"
-                aria-label="account of current user"
-                aria-controls="menu-appbar"
-                aria-haspopup="true"
-                onClick={handleMenu}
-                color="inherit"
-              >
-                <AccountCircle sx={{ color: "text.secondary" }} />
-              </IconButton>
+
+              {/* Profile Picture with Menu */}
+              <ProfileAvatarWrapper>
+                <IconButton
+                  size="large"
+                  aria-label="account of current user"
+                  aria-controls="menu-appbar"
+                  aria-haspopup="true"
+                  onClick={handleMenu}
+                  color="inherit"
+                >
+                  {profileImage ? (
+                    <Avatar sx={{ width: 40, height: 40 }}>
+                      <AdvancedImage
+                        cldImg={profileImage}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    </Avatar>
+                  ) : (
+                    <Avatar sx={{ bgcolor: theme.palette.primary.main }}>
+                      <AccountCircle />
+                    </Avatar>
+                  )}
+                </IconButton>
+                <UploadIconButton className="upload-icon" size="small" onClick={handleProfilePictureClick}>
+                  <PhotoCamera fontSize="small" />
+                </UploadIconButton>
+              </ProfileAvatarWrapper>
+
               <Menu
                 id="menu-appbar"
                 anchorEl={anchorEl}
@@ -498,13 +573,12 @@ export default function Dashboard() {
                 open={Boolean(anchorEl)}
                 onClose={handleClose}
               >
-                <MenuItem onClick={handleClose}>Profile</MenuItem>
-                <MenuItem onClick={handleClose}>My account</MenuItem>
+                <MenuItem onClick={handleClose} component={Link} to="/profile">Profile</MenuItem>
+                {/* <MenuItem onClick={handleClose}>My account</MenuItem> */}
                 <MenuItem onClick={handleLogout}>Logout</MenuItem>
               </Menu>
             </Box>
           </Toolbar>
-
         </Container>
       </StyledAppBar>
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>

@@ -10,6 +10,8 @@ import SignupForm from "../Register";
 import ParentRegistrationForm from "../Registration/parent-registration-form";
 import TutorRegistrationForm from "../Registration/tutor-registration-form";
 import InnovationBox from "../../pages/innovation-box";
+import ProfileEdit from "../profile-edit";
+import ParentProfileEdit from "../parent-profile";
 
 
 
@@ -26,6 +28,8 @@ const AppRoutes = () => {
       <Route path={AppRouteKeys.parentRegistration} element={<ParentRegistrationForm />} />
       <Route path={AppRouteKeys.tutorRegistration} element={<TutorRegistrationForm />} />
       <Route path={AppRouteKeys.innovationBox} element={<InnovationBox />} />
+      <Route path={AppRouteKeys.tutorProfile} element={<ProfileEdit />} />
+      <Route path={AppRouteKeys.parentProfile} element={<ParentProfileEdit />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

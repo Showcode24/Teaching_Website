@@ -2,10 +2,12 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { TextField, Typography, Box, Button, Avatar, CircularProgress } from "@mui/material"
+import { TextField, Typography, Box, Button, CircularProgress } from "@mui/material"
 import { styled } from "@mui/material/styles"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../../firebase/firebase"
+import { Cloudinary } from "@cloudinary/url-gen"
+import { AdvancedImage } from "@cloudinary/react"
+import { fill } from "@cloudinary/url-gen/actions/resize"
+import { autoGravity } from "@cloudinary/url-gen/qualifiers/gravity"
 
 interface BioInfoProps {
   onDataChange?: (data: {
@@ -34,6 +36,13 @@ const VisuallyHiddenInput = styled("input")({
   width: 1,
 })
 
+// Initialize Cloudinary instance
+const cld = new Cloudinary({
+  cloud: {
+    cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "drsdycckb",
+  },
+})
+
 export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
   const [bioInfo, setBioInfo] = useState({
     bio: initialData?.bio || "",
@@ -52,6 +61,19 @@ export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isInitialMount = useRef(true) // Prevents useEffect from triggering on mount
 
+  // Create a Cloudinary image object if profilePicture exists
+  const profileImage = bioInfo.profilePicture
+    ? cld
+      .image(
+        bioInfo.profilePicture.includes("/")
+          ? bioInfo.profilePicture.split("/").pop()?.split(".")[0] || ""
+          : bioInfo.profilePicture,
+      )
+      .format("auto")
+      .quality("auto")
+      .resize(fill().gravity(autoGravity()).width(120).height(120))
+    : null
+
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false
@@ -67,7 +89,10 @@ export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
     if (name === "achievements" || name === "interests") {
       setRawInputs((prev) => ({ ...prev, [name]: value }))
       const processedArray = value
-        ? value.split(",").map((item) => item.trim()).filter(Boolean)
+        ? value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean)
         : []
       setBioInfo((prev) => ({ ...prev, [name]: processedArray }))
     } else {
@@ -84,24 +109,40 @@ export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
     try {
       setUploading(true)
 
-      const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.]/g, "_")
-      const fileName = `profile-pictures/${Date.now()}-${sanitizedFileName}`
-      const storageRef = ref(storage, fileName)
+      // Create a FormData object to send the file to Cloudinary
+      const formData = new FormData()
+      formData.append("file", file)
 
-      // Upload file to Firebase Storage
-      const snapshot = await uploadBytes(storageRef, file)
-      const downloadURL = await getDownloadURL(snapshot.ref)
+      const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "drsdycckb"
 
+      // Use the upload preset you created
+      formData.append("upload_preset", "profile-pictures")
+
+      // Upload to Cloudinary
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (data.error) {
+        throw new Error(`Failed to upload: ${data.error.message || JSON.stringify(data.error)}`)
+      }
+
+      // Store the public_id instead of the full URL
       setBioInfo((prev) => ({
         ...prev,
-        profilePicture: downloadURL,
+        profilePicture: data.public_id,
       }))
     } catch (error: any) {
       console.error("Error uploading profile picture:", error)
       alert(`Upload failed: ${error.message}`)
     } finally {
       setUploading(false)
-      e.target.value = "" // Reset file input to allow re-upload
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "" // Reset file input to allow re-upload
+      }
     }
   }
 
@@ -116,7 +157,24 @@ export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
 
       {/* Profile Picture Upload Section */}
       <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", my: 3 }}>
-        <Avatar src={bioInfo.profilePicture} alt="Profile Picture" sx={{ width: 120, height: 120, mb: 2 }} />
+        <Box sx={{ width: 120, height: 120, borderRadius: "50%", overflow: "hidden", mb: 2 }}>
+          {profileImage ? (
+            <AdvancedImage cldImg={profileImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <Box
+              sx={{
+                width: "100%",
+                height: "100%",
+                bgcolor: "grey.300",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Typography color="text.secondary">No Image</Typography>
+            </Box>
+          )}
+        </Box>
 
         <Button
           component="label"
@@ -163,6 +221,7 @@ export default function BioInfo({ onDataChange, initialData }: BioInfoProps) {
     </Box>
   )
 }
+
 
 
 

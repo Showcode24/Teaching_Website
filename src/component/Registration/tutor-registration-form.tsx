@@ -1,22 +1,24 @@
-import { useState } from "react";
-import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "../../firebase/firebase"; // Adjust this import based on your Firebase config file location
+"use client"
+
+import { useState } from "react"
+import { doc, setDoc } from "firebase/firestore"
+import { auth, db } from "../../firebase/firebase" // Adjust this import based on your Firebase config file location
 
 // Form steps components
-import PersonalInfo from "./steps/personal-info";
-import ContactInfo from "./steps/contact-info";
-import BankInfo from "./steps/bank-info";
-import LocationInfo from "./steps/location-info";
-import EducationInfo from "./steps/education-info";
-import ExperienceInfo from "./steps/experience-info";
-import SubjectsSelection from "./steps/subjects-selection";
-import BioInfo from "./steps/bio-info";
-import ReviewInfo from "./steps/review-info";
-import SubmitInfo from "./steps/submit-info";
+import PersonalInfo from "./steps/personal-info"
+import ContactInfo from "./steps/contact-info"
+import BankInfo from "./steps/bank-info"
+import LocationInfo from "./steps/location-info"
+import EducationInfo from "./steps/education-info"
+import ExperienceInfo from "./steps/experience-info"
+import SubjectsSelection from "./steps/subjects-selection"
+import BioInfo from "./steps/bio-info"
+import ReviewInfo from "./steps/review-info"
+import SubmitInfo from "./steps/submit-info"
 
 export default function TutorRegistrationForm() {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const totalSteps = 10;
+  const [currentStep, setCurrentStep] = useState<number>(1)
+  const totalSteps = 10
 
   const [formData, setFormData] = useState({
     personalInfo: { fullName: "", gender: "" },
@@ -33,62 +35,110 @@ export default function TutorRegistrationForm() {
       technical: [],
       vocational: [],
     },
-    bioInfo: { bio: "", achievements: [], interests: [] },
-  });
+    bioInfo: {
+      bio: "",
+      achievements: [],
+      interests: [],
+      profilePicture: "", // This will store the Cloudinary public_id
+    },
+  })
 
   const handleDataChange = (step: keyof typeof formData, data: any) => {
-    setFormData((prev) => ({ ...prev, [step]: { ...prev[step], ...data } }));
-  };
+    setFormData((prev) => ({ ...prev, [step]: { ...prev[step], ...data } }))
+  }
 
   const handleNext = () => {
-    setCurrentStep((prev) => Math.min(prev + 1, totalSteps));
-  };
+    setCurrentStep((prev) => Math.min(prev + 1, totalSteps))
+  }
 
   const handleBack = () => {
-    setCurrentStep((prev) => Math.max(prev - 1, 1));
-  };
+    setCurrentStep((prev) => Math.max(prev - 1, 1))
+  }
 
   const handleSubmit = async () => {
     try {
-      const user = auth.currentUser;
+      const user = auth.currentUser
       if (!user) {
-        throw new Error("No authenticated user found");
+        throw new Error("No authenticated user found")
       }
 
-      await setDoc(doc(db, "tutors", user.uid), formData);
-      alert("Registration submitted successfully. Click 'OK' to proceed to your dashboard");
+      // Create a modified version of the form data to store in Firestore
+      const firestoreData = {
+        ...formData,
+        // Add any additional metadata about the Cloudinary image if needed
+        bioInfo: {
+          ...formData.bioInfo,
+          // You can add the full Cloudinary URL if you want to store it explicitly
+          profilePictureUrl: formData.bioInfo.profilePicture
+            ? `https://res.cloudinary.com/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "drsdycckb"}/image/upload/${formData.bioInfo.profilePicture}`
+            : "",
+        },
+      }
+
+      await setDoc(doc(db, "tutors", user.uid), firestoreData)
+      alert("Registration submitted successfully. Click 'OK' to proceed to your dashboard")
     } catch (error) {
-      console.error("Error submitting registration:", error);
-      alert("Failed to submit registration. Please try again.");
+      console.error("Error submitting registration:", error)
+      alert("Failed to submit registration. Please try again.")
     }
-  };
+  }
 
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return <PersonalInfo onDataChange={(data) => handleDataChange("personalInfo", data)} initialData={formData.personalInfo} />;
+        return (
+          <PersonalInfo
+            onDataChange={(data) => handleDataChange("personalInfo", data)}
+            initialData={formData.personalInfo}
+          />
+        )
       case 2:
-        return <ContactInfo onDataChange={(data) => handleDataChange("contactInfo", data)} initialData={formData.contactInfo} />;
+        return (
+          <ContactInfo
+            onDataChange={(data) => handleDataChange("contactInfo", data)}
+            initialData={formData.contactInfo}
+          />
+        )
       case 3:
-        return <BankInfo onDataChange={(data) => handleDataChange("bankInfo", data)} initialData={formData.bankInfo} />;
+        return <BankInfo onDataChange={(data) => handleDataChange("bankInfo", data)} initialData={formData.bankInfo} />
       case 4:
-        return <LocationInfo onDataChange={(data) => handleDataChange("locationInfo", data)} initialData={formData.locationInfo} />;
+        return (
+          <LocationInfo
+            onDataChange={(data) => handleDataChange("locationInfo", data)}
+            initialData={formData.locationInfo}
+          />
+        )
       case 5:
-        return <EducationInfo onDataChange={(data) => handleDataChange("educationInfo", data)} initialData={formData.educationInfo} />;
+        return (
+          <EducationInfo
+            onDataChange={(data) => handleDataChange("educationInfo", data)}
+            initialData={formData.educationInfo}
+          />
+        )
       case 6:
-        return <ExperienceInfo onDataChange={(data) => handleDataChange("experienceInfo", data)} initialData={formData.experienceInfo} />;
+        return (
+          <ExperienceInfo
+            onDataChange={(data) => handleDataChange("experienceInfo", data)}
+            initialData={formData.experienceInfo}
+          />
+        )
       case 7:
-        return <SubjectsSelection onDataChange={(data) => handleDataChange("subjectSelection", data)} initialData={formData.subjectSelection} />;
+        return (
+          <SubjectsSelection
+            onDataChange={(data) => handleDataChange("subjectSelection", data)}
+            initialData={formData.subjectSelection}
+          />
+        )
       case 8:
-        return <BioInfo onDataChange={(data) => handleDataChange("bioInfo", data)} initialData={formData.bioInfo} />;
+        return <BioInfo onDataChange={(data) => handleDataChange("bioInfo", data)} initialData={formData.bioInfo} />
       case 9:
-        return <ReviewInfo formData={formData} />;
+        return <ReviewInfo formData={formData} />
       case 10:
-        return <SubmitInfo onSubmit={handleSubmit} />;
+        return <SubmitInfo onSubmit={handleSubmit} />
       default:
-        return null;
+        return null
     }
-  };
+  }
 
   return (
     <div className="container-fluid bg-light min-vh-100 d-flex flex-column justify-content-center align-items-center p-5">
@@ -114,7 +164,11 @@ export default function TutorRegistrationForm() {
           </button>
         )}
         {currentStep < totalSteps ? (
-          <button className="btn btn-primary" onClick={handleNext} style={{ marginLeft: currentStep === 1 ? "auto" : "0" }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleNext}
+            style={{ marginLeft: currentStep === 1 ? "auto" : "0" }}
+          >
             Next
           </button>
         ) : (
@@ -124,5 +178,6 @@ export default function TutorRegistrationForm() {
         )}
       </div>
     </div>
-  );
+  )
 }
+
