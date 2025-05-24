@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import {
   Box,
   Typography,
@@ -72,6 +72,7 @@ import { autoGravity } from "@cloudinary/url-gen/qualifiers/gravity"
 
 // First, add Bootstrap CSS import at the top of the file
 import "bootstrap/dist/css/bootstrap.min.css"
+import theme from "./theme"
 
 // Initialize Cloudinary instance
 const cld = new Cloudinary({
@@ -82,7 +83,7 @@ const cld = new Cloudinary({
 
 // Styled Components with improved aesthetics
 // Update the ProfileHeader styled component to be more responsive
-const ProfileHeader = styled(Box)(({ theme }) => ({
+const ProfileHeader = styled(Box)(({ theme: _theme }) => ({
   position: "relative",
   height: 280,
   background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 100%)`,
@@ -154,7 +155,7 @@ const UploadIconButton = styled(IconButton)(({ theme }) => ({
   boxShadow: "0 4px 10px rgba(0, 0, 0, 0.15)",
 }))
 
-const StyledCard = styled(Card)(({ theme }) => ({
+const StyledCard = styled(Card)(({ }) => ({
   transition: "transform 0.3s ease, box-shadow 0.3s ease",
   height: "100%",
   borderRadius: 16,
@@ -188,7 +189,7 @@ const SectionTitle = styled(Typography)(({ theme }) => ({
   },
 }))
 
-const StyledTab = styled(Tab)(({ theme }) => ({
+const StyledTab = styled(Tab)(({ theme: _theme }) => ({
   textTransform: "none",
   fontWeight: 600,
   minWidth: 100,
@@ -200,14 +201,14 @@ const StyledTab = styled(Tab)(({ theme }) => ({
   },
 }))
 
-const EditableTypography = styled(Typography)(({ theme }) => ({
-  cursor: "pointer",
-  "&:hover": {
-    backgroundColor: alpha(theme.palette.primary.main, 0.1),
-  },
-  padding: theme.spacing(1),
-  borderRadius: theme.shape.borderRadius,
-}))
+// const EditableTypography = styled(Typography)(({ theme }) => ({
+//   cursor: "pointer",
+//   "&:hover": {
+//     backgroundColor: alpha(theme.palette.primary.main, 0.1),
+//   },
+//   padding: theme.spacing(1),
+//   borderRadius: theme.shape.borderRadius,
+// }))
 
 const ColoredChip = styled(Chip)(({ theme }) => ({
   backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -221,7 +222,7 @@ const ColoredChip = styled(Chip)(({ theme }) => ({
   },
 }))
 
-const StyledButton = styled(Button)(({ theme }) => ({
+const StyledButton = styled(Button)(({ }) => ({
   borderRadius: 8,
   textTransform: "none",
   fontWeight: 600,
@@ -296,9 +297,8 @@ interface TutorData {
 
 export default function ProfileEdit() {
   const theme = useTheme()
-  const location = useLocation()
+  // const location = useLocation()
   const navigate = useNavigate()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeTab, setActiveTab] = useState(0)
   const [tutorData, setTutorData] = useState<TutorData>({})
   const [loading, setLoading] = useState(true)
@@ -322,13 +322,7 @@ export default function ProfileEdit() {
     index: undefined,
   })
   const [dialogValue, setDialogValue] = useState("")
-
-  // Function to handle profile picture click
-  const handleProfilePictureClick = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Fetch tutor data
   useEffect(() => {
@@ -353,7 +347,55 @@ export default function ProfileEdit() {
     fetchTutorData()
   }, [])
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  // Function to handle profile picture click
+  const handleProfilePictureClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !auth.currentUser) return
+
+    setUploadingImage(true)
+    try {
+      // Create a FormData object to send the file
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("upload_preset", "profile-pictures")
+
+      // Upload to Cloudinary
+      const cloudName = cld.getConfig().cloud?.cloudName || "drsdycckb"
+      const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+        method: "POST",
+        body: formData,
+      })
+
+      const data = await response.json()
+
+      if (data.public_id) {
+        const updatedData = {
+          ...tutorData,
+          bioInfo: {
+            ...tutorData.bioInfo,
+            profilePicture: data.public_id,
+            achievements: tutorData.bioInfo?.achievements || [], // Initialize with empty array if undefined
+          },
+        }
+        setTutorData(updatedData)
+        await updateTutorData(updatedData)
+        setSuccess("Profile picture updated successfully")
+      }
+    } catch (err) {
+      console.error("Error uploading image:", err)
+      setError("Failed to upload profile picture")
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue)
   }
 
@@ -464,7 +506,7 @@ export default function ProfileEdit() {
 
     setSaving(true)
     try {
-      await updateDoc(doc(db, "tutors", auth.currentUser.uid), data)
+      await updateDoc(doc(db, "tutors", auth.currentUser.uid), data as any)
       setSuccess("Profile updated successfully")
 
       // Clear success message after 3 seconds
@@ -481,47 +523,6 @@ export default function ProfileEdit() {
       }, 3000)
     } finally {
       setSaving(false)
-    }
-  }
-
-  // Update the handleFileChange function to ensure achievements is initialized if undefined
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !auth.currentUser) return
-
-    setUploadingImage(true)
-    try {
-      // Create a FormData object to send the file
-      const formData = new FormData()
-      formData.append("file", file)
-      formData.append("upload_preset", "tutor_profiles") // Replace with your Cloudinary upload preset
-
-      // Upload to Cloudinary
-      const response = await fetch(`https://api.cloudinary.com/v1_1/${cld.getConfig().cloud?.cloudName}/image/upload`, {
-        method: "POST",
-        body: formData,
-      })
-
-      const data = await response.json()
-
-      if (data.public_id) {
-        const updatedData = {
-          ...tutorData,
-          bioInfo: {
-            ...tutorData.bioInfo,
-            profilePicture: data.public_id,
-            achievements: tutorData.bioInfo?.achievements || [], // Initialize with empty array if undefined
-          },
-        }
-        setTutorData(updatedData)
-        await updateTutorData(updatedData)
-        setSuccess("Profile picture updated successfully")
-      }
-    } catch (err) {
-      console.error("Error uploading image:", err)
-      setError("Failed to upload profile picture")
-    } finally {
-      setUploadingImage(false)
     }
   }
 
@@ -543,7 +544,11 @@ export default function ProfileEdit() {
   // Create a Cloudinary image object if profilePicture exists
   const profileImage = tutorData.bioInfo?.profilePicture
     ? cld
-      .image(tutorData.bioInfo.profilePicture)
+      .image(
+        tutorData.bioInfo.profilePicture.includes("/")
+          ? tutorData.bioInfo.profilePicture.split("/").pop()?.split(".")[0] || ""
+          : tutorData.bioInfo.profilePicture,
+      )
       .format("auto")
       .quality("auto")
       .resize(fill().gravity(autoGravity()).width(200).height(200))
@@ -557,24 +562,24 @@ export default function ProfileEdit() {
   if (tutorData.subjectSelection?.technical?.length) taughtSubjects.push("Technical")
 
   // Get tab icon based on index
-  const getTabIcon = (index: number) => {
-    switch (index) {
-      case 0:
-        return <Person />
-      case 1:
-        return <School />
-      case 2:
-        return <Work />
-      case 3:
-        return <Book />
-      case 4:
-        return <Phone />
-      case 5:
-        return <AccountBalance />
-      default:
-        return <Person />
-    }
-  }
+  // const getTabIcon = (index: number) => {
+  //   switch (index) {
+  //     case 0:
+  //       return <Person />
+  //     case 1:
+  //       return <School />
+  //     case 2:
+  //       return <Work />
+  //     case 3:
+  //       return <Book />
+  //     case 4:
+  //       return <Phone />
+  //     case 5:
+  //       return <AccountBalance />
+  //     default:
+  //       return <Person />
+  //   }
+  // }
 
   // Update the main return component to use Bootstrap's responsive grid system
   // Replace the return statement with this improved version
@@ -1367,10 +1372,9 @@ export default function ProfileEdit() {
                           </Paper>
                         )}
 
-
                         <SectionTitle variant="h6" sx={{ mt: 4 }}>
-                          <Box sx={{ display: "flex", alignItems: "center" }}>
-                            <SchoolIcon sx={{ mr: 1 }} /> Previous Schools
+                          <Box sx={{ display: "flex", alignItems: "center", pr: 1 }}>
+                            <SchoolIcon style={{ marginRight: 8 }} /> Previous Schools
                           </Box>
                           {editMode.previousSchools ? (
                             <Box>
@@ -2193,7 +2197,6 @@ export default function ProfileEdit() {
                               </Box>
                             </InfoItem>
                           </Paper>
-
                         )}
                       </CardContent>
                     </StyledCard>
@@ -2623,7 +2626,7 @@ export default function ProfileEdit() {
 }
 
 // Helper component for calendar icon
-function CalendarToday(props) {
+function CalendarToday(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}
@@ -2652,7 +2655,7 @@ function CalendarToday(props) {
 }
 
 // Helper component for school icon
-function SchoolIcon(props) {
+function SchoolIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

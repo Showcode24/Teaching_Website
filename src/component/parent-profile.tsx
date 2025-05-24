@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import {
   Box,
   Typography,
@@ -147,7 +147,7 @@ const UploadIconButton = styled(IconButton)(({ theme }) => ({
   boxShadow: "0 4px 10px rgba(0, 0, 0, 0.15)",
 }))
 
-const StyledCard = styled(Card)(({ theme }) => ({
+const StyledCard = styled(Card)(({  }) => ({
   transition: "transform 0.3s ease, box-shadow 0.3s ease",
   height: "100%",
   borderRadius: 16,
@@ -192,14 +192,14 @@ const StyledTab = styled(Tab)(({ theme }) => ({
   },
 }))
 
-const EditableTypography = styled(Typography)(({ theme }) => ({
+/* const EditableTypography = styled(Typography)(({ theme }) => ({
   cursor: "pointer",
   "&:hover": {
     backgroundColor: alpha(theme.palette.primary.main, 0.1),
   },
   padding: theme.spacing(1),
   borderRadius: theme.shape.borderRadius,
-}))
+})) */
 
 const ColoredChip = styled(Chip)(({ theme }) => ({
   backgroundColor: alpha(theme.palette.primary.main, 0.1),
@@ -213,7 +213,7 @@ const ColoredChip = styled(Chip)(({ theme }) => ({
   },
 }))
 
-const StyledButton = styled(Button)(({ theme }) => ({
+const StyledButton = styled(Button)(({  }) => ({
   borderRadius: 8,
   textTransform: "none",
   fontWeight: 600,
@@ -280,7 +280,6 @@ interface ParentData {
 
 export default function ParentProfileEdit() {
   const theme = useTheme()
-  const location = useLocation()
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [activeTab, setActiveTab] = useState(0)
@@ -355,7 +354,7 @@ export default function ParentProfileEdit() {
     fetchParentData()
   }, [auth.currentUser])
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue)
   }
 
@@ -406,7 +405,7 @@ export default function ParentProfileEdit() {
     await updateParentData(updatedData)
   }
 
-  const handleChildItemChange = async (
+  /* const handleChildItemChange = async (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
     childIndex: number,
     field: string,
@@ -425,7 +424,7 @@ export default function ParentProfileEdit() {
     }
     setParentData(updatedData)
     await updateParentData(updatedData)
-  }
+  } */
 
   const handleAddArrayItem = (section: keyof ParentData, field: string) => {
     setOpenDialog({
@@ -573,7 +572,7 @@ export default function ParentProfileEdit() {
 
     setSaving(true)
     try {
-      await updateDoc(doc(db, "parents", auth.currentUser.uid), data)
+      await updateDoc(doc(db, "parents", auth.currentUser.uid), data as any)
       setSuccess("Profile updated successfully")
 
       // Clear success message after 3 seconds
@@ -651,17 +650,17 @@ export default function ParentProfileEdit() {
   // Create a Cloudinary image object if profilePicture exists
   const profileImage = parentData.personalInfo?.profilePicture
     ? cld
-      .image(
-        parentData.personalInfo.profilePicture.includes("/")
-          ? parentData.personalInfo.profilePicture.split("/").pop()?.split(".")[0] || ""
-          : parentData.personalInfo.profilePicture,
-      )
-      .format("auto")
-      .quality("auto")
-      .resize(fill().gravity(autoGravity()).width(200).height(200))
+        .image(
+          parentData.personalInfo.profilePicture.includes("/")
+            ? parentData.personalInfo.profilePicture.split("/").pop()?.split(".")[0] || ""
+            : parentData.personalInfo.profilePicture,
+        )
+        .format("auto")
+        .quality("auto")
+        .resize(fill().gravity(autoGravity()).width(200).height(200))
     : null
 
-  // Get tab icon based on index
+  /* // Get tab icon based on index
   const getTabIcon = (index: number) => {
     switch (index) {
       case 0:
@@ -675,7 +674,9 @@ export default function ParentProfileEdit() {
       default:
         return <Person />
     }
-  }
+  } */
+
+  // const theme = useTheme()
 
   return (
     <Box sx={{ flexGrow: 1, bgcolor: "background.default", minHeight: "100vh" }} className="container-fluid p-0">

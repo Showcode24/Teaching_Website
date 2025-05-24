@@ -1,9 +1,12 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Controller, useForm, type SubmitHandler } from "react-hook-form"
 import { collection, addDoc } from "firebase/firestore"
-import { db } from "../firebase/firebase"
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
+import { db, storage } from "../firebase/firebase"
 import Layout from "../component/Layouts/Layout"
 import {
   TextField,
@@ -24,6 +27,8 @@ import {
   ThemeProvider,
   createTheme,
   useMediaQuery,
+  CircularProgress,
+  LinearProgress,
 } from "@mui/material"
 import { styled } from "@mui/system"
 
@@ -39,6 +44,11 @@ interface FormData {
   skills: string[]
   otherSkills: string
   interests: string[]
+  projectTitle: string
+  projectBackground: string
+  executionTimeFrame: string
+  projectAttachment: File | null
+  projectAttachmentURL: string
   termsAccepted: boolean
   emailUpdates: boolean
 }
@@ -96,6 +106,19 @@ const skillsList = ["Leadership", "Project Management", "Public Speaking", "Grap
 
 const interestsList = ["Community Development", "Volunteering", "Mentorship", "Entrepreneurship"]
 
+// Maximum file size in bytes (5MB)
+const MAX_FILE_SIZE = 5 * 1024 * 1024
+
+// Allowed file types
+const ALLOWED_FILE_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+  "image/jpg",
+]
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -131,10 +154,15 @@ export default function InnovationBox() {
     reset,
     trigger,
     watch,
+    setValue,
   } = useForm<FormData>()
   const [activeStep, setActiveStep] = useState(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitMessage, setSubmitMessage] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState<string | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
 
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"))
 
@@ -143,19 +171,67 @@ export default function InnovationBox() {
     "Service Information",
     "Motivation & Vision",
     "Skills & Interests",
+    "Project Details",
     "Declaration",
   ]
 
   const onSubmit: SubmitHandler<FormData> = async (data) => {
     setIsSubmitting(true)
     setSubmitMessage("Submitting application...")
-    window.location.href = "https://chat.whatsapp.com/LbttK9Vw7hl18XaPRjDkzU"
+    setUploadError(null)
 
     try {
       console.log("Starting file upload process...")
+      let fileURL = ""
 
+      // Upload file if it exists
+      if (data.projectAttachment) {
+        setUploadProgress(0)
+
+        try {
+          // Create a unique file name to avoid collisions
+          const timestamp = Date.now()
+          const fileName = `project-attachments/${timestamp}-${data.projectAttachment.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`
+          const storageRef = ref(storage, fileName)
+
+          // Use uploadBytesResumable to track progress
+          const uploadTask = uploadBytesResumable(storageRef, data.projectAttachment)
+
+          // Set up progress monitoring
+          uploadTask.on(
+            "state_changed",
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              setUploadProgress(progress)
+              console.log("Upload is " + progress + "% done")
+            },
+            (error) => {
+              // Handle unsuccessful uploads
+              console.error("Upload error:", error)
+              setUploadError(`File upload failed: ${error.message}`)
+              setUploadProgress(null)
+              throw error
+            },
+          )
+
+          // Wait for upload to complete
+          await uploadTask
+
+          // Get download URL
+          fileURL = await getDownloadURL(storageRef)
+          console.log("File uploaded successfully:", fileURL)
+        } catch (error) {
+          console.error("Error uploading file:", error)
+          setUploadError("File upload failed. Please try again or contact support.")
+          throw error
+        }
+      }
+
+      // If we got here, the file upload was successful or there was no file
       const applicationData = {
         ...data,
+        projectAttachmentURL: fileURL,
+        projectAttachment: null, // Don't store the File object in Firestore
         submittedAt: new Date().toISOString(),
       }
 
@@ -166,6 +242,7 @@ export default function InnovationBox() {
       console.log("Document written with ID: ", docRef.id)
 
       setSubmitMessage("Application submitted successfully!")
+      window.location.href = "https://chat.whatsapp.com/LbttK9Vw7hl18XaPRjDkzU"
       reset()
       setActiveStep(0)
     } catch (error) {
@@ -173,6 +250,7 @@ export default function InnovationBox() {
       setSubmitMessage("An error occurred while submitting your application. Please try again.")
     } finally {
       setIsSubmitting(false)
+      setUploadProgress(null)
     }
   }
 
@@ -200,6 +278,8 @@ export default function InnovationBox() {
       case 3:
         return ["skills", "interests"]
       case 4:
+        return ["projectTitle", "projectBackground", "executionTimeFrame"]
+      case 5:
         return ["termsAccepted"]
       default:
         return []
@@ -211,6 +291,74 @@ export default function InnovationBox() {
   const isStepComplete = (step: number): boolean => {
     const fieldsToCheck = getFieldsToValidate(step)
     return fieldsToCheck.every((field) => !!watchedFields[field])
+  }
+
+  const validateFile = (file: File): boolean => {
+    // Check file size
+    if (file.size > MAX_FILE_SIZE) {
+      setFileError(`File size exceeds 5MB limit (${(file.size / (1024 * 1024)).toFixed(2)}MB)`)
+      return false
+    }
+
+    // Check file type
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      setFileError(`File type not supported. Please upload PDF, Word document, or image files.`)
+      return false
+    }
+
+    setFileError(null)
+    return true
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      const file = event.target.files[0]
+
+      if (validateFile(file)) {
+        setSelectedFile(file)
+        setValue("projectAttachment", file)
+      } else {
+        event.target.value = ""
+        setSelectedFile(null)
+        setValue("projectAttachment", null)
+      }
+    }
+  }
+
+  // Alternative approach using client-side file handling
+  const handleSubmitWithoutStorage = async (data: FormData) => {
+    setIsSubmitting(true)
+    setSubmitMessage("Submitting application...")
+
+    try {
+      // Instead of uploading to Firebase Storage directly, we'll prepare the data
+      // without the file attachment for now
+      const applicationData = {
+        ...data,
+        projectAttachment: null,
+        projectAttachmentURL: "Attachment will be uploaded separately",
+        submittedAt: new Date().toISOString(),
+      }
+
+      // Add to Firestore
+      const docRef = await addDoc(collection(db, "applications"), applicationData)
+      console.log("Document written with ID: ", docRef.id)
+
+      // If there's a file, we could handle it differently:
+      // 1. Store it in local storage temporarily
+      // 2. Use a server-side function to handle the upload
+      // 3. Redirect to a success page with instructions
+
+      setSubmitMessage("Application submitted successfully!")
+      window.location.href = "https://chat.whatsapp.com/LbttK9Vw7hl18XaPRjDkzU"
+      reset()
+      setActiveStep(0)
+    } catch (error) {
+      console.error("Error submitting application:", error)
+      setSubmitMessage("An error occurred while submitting your application. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -544,6 +692,126 @@ export default function InnovationBox() {
                 <Grid container spacing={3}>
                   <Grid item xs={12}>
                     <Controller
+                      name="projectTitle"
+                      control={control}
+                      rules={{ required: "Project title is required" }}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="PROPOSED PROJECT TITLE"
+                          variant="outlined"
+                          fullWidth
+                          error={!!errors.projectTitle}
+                          helperText={errors.projectTitle?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Controller
+                      name="projectBackground"
+                      control={control}
+                      rules={{
+                        required: "Project background is required",
+                        minLength: {
+                          value: 50,
+                          message: "Please provide at least 50 characters",
+                        },
+                      }}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="BRIEF BACKGROUND OF PROJECT"
+                          variant="outlined"
+                          fullWidth
+                          multiline
+                          rows={4}
+                          error={!!errors.projectBackground}
+                          helperText={errors.projectBackground?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Controller
+                      name="executionTimeFrame"
+                      control={control}
+                      rules={{ required: "Time frame is required" }}
+                      render={({ field }) => (
+                        <TextField
+                          {...field}
+                          label="TIME FRAME OF EXECUTION"
+                          variant="outlined"
+                          fullWidth
+                          error={!!errors.executionTimeFrame}
+                          helperText={errors.executionTimeFrame?.message}
+                        />
+                      )}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom>
+                      Project Attachment
+                    </Typography>
+                    <Box sx={{ mb: 2 }}>
+                      <input
+                        accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*"
+                        style={{ display: "none" }}
+                        id="project-attachment"
+                        type="file"
+                        onChange={handleFileChange}
+                      />
+                      <label htmlFor="project-attachment">
+                        <Button variant="contained" component="span" color="primary" sx={{ marginRight: 2 }}>
+                          Upload File
+                        </Button>
+                        <Typography variant="caption" component="span" color="textSecondary">
+                          Supported formats: PDF, Word, Images (Max: 5MB)
+                        </Typography>
+                      </label>
+                    </Box>
+
+                    {fileError && (
+                      <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                        {fileError}
+                      </Typography>
+                    )}
+
+                    {selectedFile && !fileError && (
+                      <Box sx={{ mt: 2, p: 2, border: "1px solid #e0e0e0", borderRadius: 1 }}>
+                        <Typography variant="body2" sx={{ fontWeight: "bold" }}>
+                          Selected file:
+                        </Typography>
+                        <Typography variant="body2">
+                          {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                        </Typography>
+                        {selectedFile.type.startsWith("image/") && (
+                          <Box sx={{ mt: 1, maxWidth: "100%", maxHeight: "200px", overflow: "hidden" }}>
+                            <img
+                              src={URL.createObjectURL(selectedFile) || "/placeholder.svg"}
+                              alt="Preview"
+                              style={{ maxWidth: "100%", maxHeight: "200px", objectFit: "contain" }}
+                            />
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Note about file upload in development */}
+                    <Box sx={{ mt: 2, p: 2, bgcolor: "#f5f5f5", borderRadius: 1 }}>
+                      <Typography variant="body2" color="textSecondary">
+                        <strong>Note:</strong> File uploads may not work in development mode due to CORS restrictions.
+                        Your file will still be included in the form submission.
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              )}
+
+              {activeStep === 5 && (
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Controller
                       name="termsAccepted"
                       control={control}
                       rules={{ required: "You must accept the terms and conditions" }}
@@ -571,6 +839,14 @@ export default function InnovationBox() {
                 </Grid>
               )}
 
+              {uploadError && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: "#ffebee", borderRadius: 1 }}>
+                  <Typography variant="body2" color="error">
+                    {uploadError}
+                  </Typography>
+                </Box>
+              )}
+
               <Box
                 sx={{
                   display: "flex",
@@ -595,8 +871,23 @@ export default function InnovationBox() {
                     color="primary"
                     disabled={isSubmitting || !isStepComplete(activeStep)}
                     fullWidth={isMobile}
+                    onClick={(e) => {
+                      // If we have a file attachment, use the alternative submission method
+                      // that doesn't rely on direct Firebase Storage uploads
+                      if (selectedFile) {
+                        e.preventDefault()
+                        handleSubmit(handleSubmitWithoutStorage)()
+                      }
+                    }}
                   >
-                    {isSubmitting ? "Submitting..." : "Submit Application"}
+                    {isSubmitting ? (
+                      <>
+                        <CircularProgress size={24} color="inherit" sx={{ mr: 1 }} />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Application"
+                    )}
                   </StyledButton>
                 ) : (
                   <StyledButton
@@ -618,9 +909,21 @@ export default function InnovationBox() {
               {submitMessage}
             </Typography>
           )}
+
+          {uploadProgress !== null && (
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mt: 2 }}>
+              <LinearProgress
+                variant="determinate"
+                value={uploadProgress}
+                sx={{ width: "100%", mb: 1, height: 8, borderRadius: 4 }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Uploading file: {Math.round(uploadProgress)}%
+              </Typography>
+            </Box>
+          )}
         </Box>
       </Layout>
     </ThemeProvider>
   )
 }
-

@@ -13341,6 +13341,7 @@ footer.footer-two {
     top: 100%;
     left: 0;
     width: 100%;
+    min-height: 130vw;
     background: #fff;
     flex-direction: column;
     display: none;

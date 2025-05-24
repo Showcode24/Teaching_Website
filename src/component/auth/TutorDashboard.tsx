@@ -84,6 +84,8 @@ interface Job {
   totalBill?: number
   contactInfo?: string
   parentId?: string
+  selectedDays?: Record<string, boolean>
+  dayTimes?: Record<string, { start: string; end: string }>
 }
 
 interface HireRequest {
@@ -94,8 +96,11 @@ interface HireRequest {
   sessionsPerWeek: string
   jobDescription: string
   skillsRequired: string
+  subjectAreas?: string
   location: string
+  tutoringAddress?: string
   contactInfo: string
+  phoneNumber?: string
   created_at: any
   status: string
   tutor_id: string
@@ -103,6 +108,8 @@ interface HireRequest {
   totalBill: number
   parentId?: string
   hireId?: string
+  selectedDays?: Record<string, boolean>
+  dayTimes?: Record<string, { start: string; end: string }>
 }
 
 interface Parent {
@@ -152,7 +159,7 @@ const SearchTextField = styled(TextField)(({ theme }) => ({
 }))
 
 // Styled avatar with upload button overlay
-const ProfileAvatarWrapper = styled(Box)(({ theme }) => ({
+const ProfileAvatarWrapper = styled(Box)(({ }) => ({
   position: "relative",
   "&:hover .upload-icon": {
     opacity: 1,
@@ -345,16 +352,18 @@ export default function Dashboard() {
                 hourlyRate: hireData.hourlyRate,
                 studyLevel: hireData.studyLevel,
                 sessionsPerWeek: hireData.sessionsPerWeek,
-                location: hireData.location,
-                skillsRequired: hireData.skillsRequired,
+                location: hireData.location || hireData.tutoringAddress,
+                skillsRequired: hireData.skillsRequired || hireData.subjectAreas,
                 status: "accepted",
                 created_at: new Date().toISOString(),
                 accepted_tutor_id: { id: currentUserId },
                 isHireRequest: true,
                 hoursDaily: hireData.hoursDaily,
                 totalBill: hireData.totalBill,
-                contactInfo: hireData.contactInfo,
+                contactInfo: hireData.contactInfo || hireData.phoneNumber,
                 parentId: confirmHireAction.parentId,
+                selectedDays: hireData.selectedDays,
+                dayTimes: hireData.dayTimes,
               }
 
               setFilteredJobs((prev) => {
@@ -398,20 +407,22 @@ export default function Dashboard() {
       // Convert hire requests to a format compatible with jobs for display
       const formattedHireRequests = hireRequests.map((hire) => ({
         id: `hire_${hire.hireId}`,
-        jobTitle: hire.jobTitle,
-        jobDescription: hire.jobDescription,
-        hourlyRate: hire.hourlyRate,
-        studyLevel: hire.studyLevel,
-        sessionsPerWeek: hire.sessionsPerWeek,
-        location: hire.location,
-        skillsRequired: hire.skillsRequired,
-        status: hire.status,
-        created_at: hire.created_at?.toDate?.() || hire.created_at,
+        jobTitle: hire.jobTitle || "Untitled Job",
+        jobDescription: hire.jobDescription || "No description provided",
+        hourlyRate: hire.hourlyRate || "0",
+        studyLevel: hire.studyLevel || "Not specified",
+        sessionsPerWeek: hire.sessionsPerWeek || "0",
+        location: hire.tutoringAddress || hire.location || "Remote",
+        skillsRequired: hire.subjectAreas || hire.skillsRequired || "",
+        status: hire.status || "pending",
+        created_at: hire.created_at?.toDate?.() || hire.created_at || new Date().toISOString(),
         isHireRequest: true,
-        totalBill: hire.totalBill,
-        hoursDaily: hire.hoursDaily,
-        contactInfo: hire.contactInfo,
+        totalBill: hire.totalBill || 0,
+        hoursDaily: hire.hoursDaily || "0",
+        contactInfo: hire.phoneNumber || hire.contactInfo || "",
         parentId: hire.parentId,
+        selectedDays: hire.selectedDays || {},
+        dayTimes: hire.dayTimes || {},
       }))
 
       setFilteredJobs(
@@ -481,7 +492,7 @@ export default function Dashboard() {
 
   // Navigate to profile page to upload profile picture
   const handleProfilePictureClick = () => {
-    navigate("/profile")
+    navigate("/tutor-profile")
   }
 
   // Create a Cloudinary image object if profilePicture exists
@@ -573,7 +584,9 @@ export default function Dashboard() {
                 open={Boolean(anchorEl)}
                 onClose={handleClose}
               >
-                <MenuItem onClick={handleClose} component={Link} to="/profile">Profile</MenuItem>
+                <MenuItem onClick={handleClose} component={Link} to="/tutor-profile">
+                  Profile
+                </MenuItem>
                 {/* <MenuItem onClick={handleClose}>My account</MenuItem> */}
                 <MenuItem onClick={handleLogout}>Logout</MenuItem>
               </Menu>
@@ -707,9 +720,6 @@ export default function Dashboard() {
                             </IconButton>
                           </Box>
                           <Box display="flex" alignItems="center" gap={1} mb={1}>
-                            <Typography variant="h6" sx={{ fontWeight: 600, color: "text.primary" }}>
-                              {job.jobTitle}
-                            </Typography>
                             {job.isHireRequest && (
                               <Chip
                                 label="Direct Hire"
@@ -748,33 +758,24 @@ export default function Dashboard() {
                               }}
                             />
                           </Box>
-                          {activeTab !== "Appointments" && (
-                            <Typography
-                              mb={2}
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{
-                                display: "-webkit-box",
-                                WebkitLineClamp: 3,
-                                WebkitBoxOrient: "vertical",
-                                overflow: "hidden",
-                              }}
-                            >
-                              {job.jobDescription}
+                          <Box display="flex" flexDirection="column" gap={1} mb={2}>
+                            <Typography variant="subtitle2" color="primary" fontWeight={600}>
+                              Subject Areas
                             </Typography>
-                          )}
-                          <Box display="flex" gap={1} mb={2} flexWrap="wrap">
-                            {job.skillsRequired.split(",").map((skill: string, index: number) => (
-                              <Chip
-                                key={index}
-                                label={skill.trim()}
-                                size="small"
-                                sx={{
-                                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                                  color: theme.palette.primary.main,
-                                }}
-                              />
-                            ))}
+                            <Box display="flex" gap={1} flexWrap="wrap">
+                              {job.skillsRequired &&
+                                job.skillsRequired.split(",").map((skill: string, index: number) => (
+                                  <Chip
+                                    key={index}
+                                    label={skill.trim()}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                      color: theme.palette.primary.main,
+                                    }}
+                                  />
+                                ))}
+                            </Box>
                           </Box>
                           {job.isHireRequest && (
                             <Box mt={2} p={2} bgcolor={alpha(theme.palette.secondary.main, 0.1)} borderRadius={1}>
@@ -790,6 +791,25 @@ export default function Dashboard() {
                               <Typography variant="body2" color="text.secondary">
                                 <strong>Contact:</strong> {job.contactInfo}
                               </Typography>
+                            </Box>
+                          )}
+                          {job.isHireRequest && job.selectedDays && job.dayTimes && (
+                            <Box mt={2} p={2} bgcolor={alpha(theme.palette.info.main, 0.1)} borderRadius={1}>
+                              <Typography variant="subtitle2" color="info.main" fontWeight={600} mb={1}>
+                                Schedule
+                              </Typography>
+                              <Grid container spacing={1}>
+                                {Object.entries(job.selectedDays).map(([day, isSelected]) =>
+                                  isSelected && job.dayTimes?.[day] ? (
+                                    <Grid item xs={12} sm={6} key={day}>
+                                      <Typography variant="body2" color="text.secondary">
+                                        <strong style={{ textTransform: "capitalize" }}>{day}:</strong>{" "}
+                                        {job.dayTimes[day].start} - {job.dayTimes[day].end}
+                                      </Typography>
+                                    </Grid>
+                                  ) : null,
+                                )}
+                              </Grid>
                             </Box>
                           )}
                           <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
@@ -959,6 +979,9 @@ export default function Dashboard() {
     </Box>
   )
 }
+
+
+
 
 
 
